@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+</head>
+<body style="margin:0;padding:0;background-color:#f0faf0;font-family:Arial,Helvetica,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f0faf0;padding:40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(34,90,50,0.12);">
+
+          <!-- Header verde -->
+          <tr>
+            <td style="background:linear-gradient(135deg,#1a5c2e,#2d7a42,#3a9455);padding:40px 40px 30px;text-align:center;">
+              <h1 style="color:#ffffff;font-size:22px;margin:0 0 8px;font-weight:700;">Centro Juridico Internacional S.A.S</h1>
+              <p style="color:rgba(255,255,255,0.85);font-size:14px;margin:0;">Plataforma de Capacitaciones Empresariales</p>
+            </td>
+          </tr>
+
+          <!-- Icono de confirmacion -->
+          <tr>
+            <td style="padding:30px 40px 0;text-align:center;">
+              <table cellpadding="0" cellspacing="0" style="margin:0 auto;">
+                <tr>
+                  <td style="background-color:#dcfce7;border:2px solid #86efac;border-radius:50%;width:56px;height:56px;text-align:center;vertical-align:middle;font-size:28px;color:#16a34a;">
+                    &#10003;
+                  </td>
+                </tr>
+              </table>
+              <h2 style="color:#1e293b;font-size:20px;margin:16px 0 6px;font-weight:700;">Capacitacion Confirmada</h2>
+              <p style="color:#64748b;font-size:14px;margin:0 0 24px;line-height:1.5;">Su capacitacion ha sido programada exitosamente. A continuacion encontrara los detalles:</p>
+            </td>
+          </tr>
+
+          <!-- Detalles -->
+          <tr>
+            <td style="padding:0 40px;">
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f7fdf8;border:1px solid #d1e7d5;border-radius:12px;overflow:hidden;">
+                <tr>
+                  <td style="padding:14px 20px;border-bottom:1px solid #d1e7d5;">
+                    <span style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;">Empresa</span><br>
+                    <span style="color:#1e293b;font-size:15px;font-weight:600;">{{empresa}}</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:14px 20px;border-bottom:1px solid #d1e7d5;">
+                    <span style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;">NIT</span><br>
+                    <span style="color:#1e293b;font-size:15px;">{{nit}}</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:14px 20px;border-bottom:1px solid #d1e7d5;">
+                    <span style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;">Capacitacion</span><br>
+                    <span style="color:#1e293b;font-size:15px;font-weight:600;">{{capacitacion}}</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:14px 20px;">
+                    <table width="100%" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td width="50%">
+                          <span style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;">Fecha</span><br>
+                          <span style="color:#1e293b;font-size:15px;">{{fecha}}</span>
+                        </td>
+                        <td width="50%">
+                          <span style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;">Hora</span><br>
+                          <span style="color:#1e293b;font-size:15px;">{{hora}}</span>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Boton Meet -->
+          <tr>
+            <td style="padding:24px 40px;text-align:center;">
+              <p style="color:#64748b;font-size:13px;margin:0 0 12px;">Unase a la reunion en la fecha y hora indicada:</p>
+              <a href="{{link_meet}}" target="_blank" style="display:inline-block;background:linear-gradient(135deg,#1a5c2e,#2d7a42);color:#ffffff;text-decoration:none;padding:14px 40px;border-radius:10px;font-size:15px;font-weight:700;letter-spacing:0.3px;">
+                Unirse a Google Meet
+              </a>
+            </td>
+          </tr>
+
+          <!-- Separador -->
+          <tr>
+            <td style="padding:0 40px;">
+              <hr style="border:none;border-top:1px solid #d1e7d5;margin:0;">
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding:24px 40px 32px;text-align:center;">
+              <p style="color:#94a3b8;font-size:12px;margin:0 0 4px;line-height:1.5;">
+                Este correo fue enviado automaticamente por el sistema de capacitaciones de
+              </p>
+              <p style="color:#2d7a42;font-size:12px;margin:0;font-weight:600;">
+                Centro Juridico Internacional S.A.S
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
