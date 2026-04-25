@@ -90,17 +90,21 @@ const SALAS_MEET: Record<string, string> = {
 };
 
 const CAPACITACIONES = [
-  "ELABORACIÓN REGLAMENTO INTERNO DE TRABAJO",
-  "ACTUALIZACIÓN REGLAMENTO INTERNO DE TRABAJO",
-  "POLÍTICA DE PROTECCIÓN DE DATOS ELABORACIÓN",
-  "ELABORACIÓN POLÍTICA DE DESCONEXIÓN LABORAL",
+  "REGISTRO Y/O RENOVACIÓN DE MARCA",
+  "REGLAMENTO INTERNO DE TRABAJO",
   "MANUAL OBLIGATORIO EMPRESARIAL DE TÉRMINOS Y CONDICIONES",
-  "POLÍTICA DE REGLAMENTACIÓN DE MODALIDADES LABORALES NO PRESENCIALES",
-  "POLÍTICA DE PREVENCIÓN Y ATENCIÓN DE LA DISCRIMINACIÓN Y ACOSO EN EL AMBIENTE LABORAL",
+  "POLÍTICA DE DESCONEXIÓN LABORAL",
+  "POLÍTICA DE PROTECCIÓN DE DATOS PERSONALES",
+  "PLAN DE CONVIVENCIA Y SEGURIDAD CIUDADANA",
+  "PLAN DE ÉTICA Y TRANSPARENCIA",
+  "PLAN ESTRATÉGICO DE SEGURIDAD VIAL",
+  "POLÍTICA DE ACUERDO DE MEDIOS TECNOLÓGICOS",
+  "POLÍTICA DE ALCOHOL Y DROGAS",
+  "POLÍTICA DE COMISIONES Y BONIFICACIONES",
   "POLÍTICA DE PERMISOS LICENCIAS E INCAPACIDADES",
   "POLÍTICA DE PREVENCIÓN DEL ACOSO SEXUAL EN EL AMBIENTE LABORAL",
-  "POLÍTICA DE COMISIONES Y BONIFICACIONES",
-  "POLÍTICA DE MEDIOS TECNOLÓGICOS",
+  "POLÍTICA DE PREVENCIÓN Y ATENCIÓN A LA DISCRIMINACIÓN Y ACOSO EN EL AMBIENTE LABORAL",
+  "POLÍTICA DE REGLAMENTACIÓN DE MODALIDADES DE CONTRATACIÓN LABORAL NO PRESENCIAL",
 ];
 
 interface FormData {
@@ -113,6 +117,53 @@ interface FormData {
 }
 
 const EMPTY: FormData = { nombre: "", correo: "", nit: "", fecha: "", hora: "", capacitacion: "" };
+
+const fmtCalendarDate = (fecha: string, hora: string, offsetMinutes = 0): string => {
+  const [y, m, d] = fecha.split("-").map(Number);
+  const [hh, mm] = hora.split(":").map(Number);
+  const dt = new Date(y, (m ?? 1) - 1, d ?? 1, hh ?? 0, mm ?? 0);
+  if (offsetMinutes) dt.setMinutes(dt.getMinutes() + offsetMinutes);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (
+    dt.getFullYear().toString() +
+    pad(dt.getMonth() + 1) +
+    pad(dt.getDate()) +
+    "T" +
+    pad(dt.getHours()) +
+    pad(dt.getMinutes()) +
+    "00"
+  );
+};
+
+const buildGoogleCalendarUrl = (params: {
+  empresa: string;
+  nit: string;
+  capacitacion: string;
+  fecha: string;
+  hora: string;
+  correo: string;
+  linkMeet: string;
+}): string => {
+  const { empresa, nit, capacitacion, fecha, hora, correo, linkMeet } = params;
+  const start = fmtCalendarDate(fecha, hora);
+  const end = fmtCalendarDate(fecha, hora, 60);
+  const text = `Capacitacion - ${empresa}`;
+  const details = [
+    `Empresa: ${empresa}`,
+    `NIT: ${nit}`,
+    `Capacitacion: ${capacitacion}`,
+    `Enlace Meet: ${linkMeet}`,
+  ].join("\n");
+  const qs = new URLSearchParams({
+    action: "TEMPLATE",
+    text,
+    dates: `${start}/${end}`,
+    details,
+    location: linkMeet,
+    add: correo,
+  });
+  return `https://calendar.google.com/calendar/render?${qs.toString()}`;
+};
 
 const Home = () => {
   const { user } = useAuth();
@@ -167,10 +218,15 @@ const Home = () => {
     setSaving(true);
     setMsg(null);
 
+    // Abre la pestaña de Google Calendar de inmediato (preservando el gesto del usuario
+    // para evitar bloqueadores de popups). Al terminar el guardado, le asignamos la URL.
+    const calendarTab = window.open("", "_blank");
+
     try {
       const ok = await checkDisponible();
       if (!ok) {
         setMsg({ type: "error", text: "Ya existe una capacitacion en esta fecha y hora con tu sala. Selecciona otro horario." });
+        calendarTab?.close();
         setSaving(false);
         return;
       }
@@ -193,7 +249,26 @@ const Home = () => {
         import.meta.env.VITE_EMAILJS_PUBLIC_KEY,
       );
 
-      setMsg({ type: "success", text: "Solicitud enviada con exito. El correo fue enviado al cliente." });
+      const calendarUrl = buildGoogleCalendarUrl({
+        empresa: form.nombre,
+        nit: form.nit,
+        capacitacion: form.capacitacion,
+        fecha: form.fecha,
+        hora: form.hora,
+        correo: form.correo,
+        linkMeet,
+      });
+
+      if (calendarTab && !calendarTab.closed) {
+        calendarTab.location.href = calendarUrl;
+      } else {
+        window.open(calendarUrl, "_blank");
+      }
+
+      setMsg({
+        type: "success",
+        text: "Solicitud enviada con éxito. Se abrió Google Calendar para confirmar el evento.",
+      });
       setForm({ ...EMPTY });
       setErrors({});
       setCustomLink(null);
@@ -201,6 +276,7 @@ const Home = () => {
       setTimeout(() => setMsg(null), 8000);
     } catch (err) {
       console.error(err);
+      calendarTab?.close();
       setMsg({ type: "error", text: "Error al enviar. Intente de nuevo." });
     } finally {
       setSaving(false);
@@ -247,7 +323,7 @@ const Home = () => {
 
             <div className="form-group">
               <label htmlFor="fecha">Fecha</label>
-              <input id="fecha" name="fecha" type="date" value={form.fecha} min={new Date().toISOString().split("T")[0]} onChange={handleChange} className={errors.fecha ? "input-error" : ""} />
+              <input id="fecha" name="fecha" type="date" value={form.fecha} onChange={handleChange} className={errors.fecha ? "input-error" : ""} />
               <span className="error-msg">{errors.fecha ?? "\u00A0"}</span>
             </div>
             <div className="form-group">
