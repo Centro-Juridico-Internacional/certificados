@@ -4,6 +4,16 @@ Aplicación web interna del **Centro Jurídico Internacional** para gestionar ca
 
 > **Acceso restringido** al dominio corporativo `@centrojuridicointernacional.com` vía Google Sign-In.
 
+## Entornos
+
+| Entorno | URL |
+|---------|-----|
+| Producción (dominio personalizado) | https://certificados.centrojuridicointernacional.co |
+| Producción (Firebase Hosting) | https://certificados-cji.web.app |
+| Local (desarrollo) | http://localhost:5173 |
+
+**Proyecto Firebase:** `certificados-cji` · Plan Spark · Región Firestore `nam5` · Propietario `desarrollo1@centrojuridicointernacional.com`.
+
 ---
 
 ## Tabla de contenidos
@@ -20,7 +30,10 @@ Aplicación web interna del **Centro Jurídico Internacional** para gestionar ca
 - [Configuración local](#configuración-local)
 - [Variables de entorno](#variables-de-entorno)
 - [Scripts disponibles](#scripts-disponibles)
+- [Despliegue a Firebase](#despliegue-a-firebase)
+- [Reglas de seguridad de Firestore](#reglas-de-seguridad-de-firestore)
 - [Optimizaciones aplicadas](#optimizaciones-aplicadas)
+- [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -53,6 +66,8 @@ Aplicación web interna del **Centro Jurídico Internacional** para gestionar ca
 | Generación de PDF | jsPDF |
 | Estilos | CSS Modules por componente (sin framework) |
 | Compilador | React Compiler (vía plugin Babel) |
+| Hosting | Firebase Hosting |
+| DNS del dominio | Bluehost (CNAME → `certificados-cji.web.app`) |
 
 ---
 
@@ -121,6 +136,10 @@ certificados/
 │   ├── main.tsx                  # Bootstrap React + BrowserRouter
 │   └── index.css                 # Estilos globales
 ├── .env                          # Variables de entorno (no versionado)
+├── .firebaserc                   # Apunta al proyecto Firebase (certificados-cji)
+├── firebase.json                 # Config de Hosting y Firestore
+├── firestore.rules               # Reglas de seguridad de Firestore
+├── firestore.indexes.json        # Índices de Firestore
 ├── index.html
 ├── package.json
 ├── tsconfig.json
@@ -196,6 +215,18 @@ Cada documento representa una solicitud de capacitación registrada desde el for
 
 **Esta es la única colección**. No hay colecciones paralelas de "certificados generados" — la tabla de `CertificadoGenerator` lee directamente de `capacitaciones` (que es la fuente de verdad).
 
+### Índices
+
+Los índices compuestos están versionados en [`firestore.indexes.json`](firestore.indexes.json) y se despliegan con `firebase deploy --only firestore:indexes`.
+
+| Campos | Uso |
+|--------|-----|
+| `nit` ASC + `fecha` DESC | Consulta usada por la **zona de afiliados** (`where('nit', 'in', [...])` + `orderBy('fecha', 'desc')`) para mostrarle a cada cliente sus certificados al ingresar su NIT. |
+
+### Consumidores externos de esta base de datos
+
+Esta colección la lee también el proyecto **Zona de Afiliados** (repositorio separado en `pagina web zona de afiliados`), que se conecta como app Firebase secundaria a `certificados-cji` con auth anónima. Cualquier cambio en el esquema de los documentos debe coordinarse con ese proyecto.
+
 ---
 
 ## Flujo de autenticación
@@ -265,8 +296,9 @@ sequenceDiagram
 ### Requisitos
 
 - Node.js 20+
-- npm o pnpm
-- Cuenta de Firebase con Authentication (Google) y Firestore habilitados
+- npm
+- [Firebase CLI](https://firebase.google.com/docs/cli) (`npm install -g firebase-tools`) — solo necesario para desplegar
+- Acceso al proyecto Firebase `certificados-cji` (o uno propio con Authentication Google y Firestore habilitados)
 - Cuenta de EmailJS con una plantilla configurada
 
 ### Instalación
@@ -288,13 +320,14 @@ Abrir [http://localhost:5173](http://localhost:5173).
 Crear un archivo `.env` en la raíz con:
 
 ```env
-# Firebase
+# Firebase — proyecto certificados-cji
 VITE_FIREBASE_API_KEY=...
 VITE_FIREBASE_AUTH_DOMAIN=...
 VITE_FIREBASE_PROJECT_ID=...
 VITE_FIREBASE_STORAGE_BUCKET=...
 VITE_FIREBASE_MESSAGING_SENDER_ID=...
 VITE_FIREBASE_APP_ID=...
+VITE_FIREBASE_MEASUREMENT_ID=...
 
 # EmailJS
 VITE_EMAILJS_SERVICE_ID=...
@@ -317,6 +350,66 @@ VITE_EMAILJS_PUBLIC_KEY=...
 
 ---
 
+## Despliegue a Firebase
+
+El proyecto se despliega a **Firebase Hosting** del proyecto `certificados-cji`.
+
+### Requisitos previos
+
+- Firebase CLI instalado: `npm install -g firebase-tools`
+- Estar logueado con una cuenta con permisos en el proyecto: `firebase login`
+- Proyecto activo apuntando a `certificados-cji`: `firebase use certificados-cji`
+
+### Comandos
+
+```bash
+# 1. Compilar la app
+npm run build
+
+# 2. Desplegar todo (Hosting + reglas de Firestore)
+firebase deploy
+
+# Variantes:
+firebase deploy --only hosting          # Solo el sitio
+firebase deploy --only firestore:rules  # Solo las reglas
+```
+
+Al terminar, el deploy responde con la URL pública. El dominio personalizado `certificados.centrojuridicointernacional.co` está configurado vía CNAME en Bluehost apuntando a `certificados-cji.web.app`.
+
+### Dominios autorizados de Authentication
+
+Si se agrega un nuevo dominio donde se sirva la app, debe añadirse manualmente en:
+
+`Firebase Console → Authentication → Configuración → Dominios autorizados`
+
+Sin esto, el botón de Google Sign-In fallará con `auth/unauthorized-domain`.
+
+---
+
+## Reglas de seguridad de Firestore
+
+Las reglas están definidas en [`firestore.rules`](firestore.rules) y se versionan junto al código. Política actual: cualquier usuario autenticado puede leer y escribir la colección `capacitaciones`. El filtro por dominio corporativo lo aplica el frontend en [`AuthContext`](src/context/AuthContext.tsx).
+
+```js
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /capacitaciones/{document} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
+```
+
+Para modificar y desplegar:
+
+```bash
+# editar firestore.rules
+firebase deploy --only firestore:rules
+```
+
+---
+
 ## Optimizaciones aplicadas
 
 - ✅ **Lazy loading de rutas** con `React.lazy` + `Suspense` en `App.tsx`. El bundle inicial del Login no incluye `xlsx`, `jspdf` ni el código del generador de certificados.
@@ -325,6 +418,52 @@ VITE_EMAILJS_PUBLIC_KEY=...
 - ✅ **Responsive con breakpoints intermedios** (1100px y 640px): los botones se apilan verticalmente en tablets y el modal/formulario adapta su layout.
 - ✅ **`translate="no"`** en la tabla para evitar que Chrome traduzca automáticamente palabras como "NIT" → "Liendre".
 - ⚠️ **Pendiente**: `diploma.jpg` (2.5 MB) podría optimizarse a ~500 KB para acelerar aún más la primera generación de certificados.
+
+---
+
+## Troubleshooting
+
+### `firebase deploy` apunta al proyecto equivocado
+La CLI guarda el proyecto activo en una caché global que tiene prioridad sobre `.firebaserc`. Fijarlo explícitamente:
+
+```bash
+firebase use certificados-cji
+firebase use     # confirma cuál está activo
+```
+
+### Login falla con `auth/unauthorized-domain`
+El dominio desde el que se sirve la app no está en la lista de **Dominios autorizados** de Authentication. Agregarlo en:
+`Firebase Console → Authentication → Configuración → Dominios autorizados`.
+
+### `Sitio no encontrado` en el dominio personalizado tras agregarlo
+Aunque el estado en Firebase Hosting diga "Conectado", a veces Firebase tarda en propagar la asociación a sus edge servers. Solución rápida: hacer un deploy adicional para forzar la actualización:
+
+```bash
+firebase deploy --only hosting
+```
+
+### El CNAME se cambió pero Firebase sigue viendo el valor anterior
+La verificación de Firebase usa los DNS de Google, que respetan el TTL del registro CNAME. Si el TTL es alto (ej. 14400 = 4 h) puede tardar. Bajar el TTL temporalmente a `300` en Bluehost acelera la siguiente verificación.
+
+### Permisos denegados al leer Firestore en producción
+Verificar que [`firestore.rules`](firestore.rules) está desplegado en el proyecto activo:
+
+```bash
+firebase deploy --only firestore:rules
+```
+
+Si el usuario está autenticado pero las lecturas fallan, abrir Firebase Console → Firestore → Reglas y confirmar que la versión publicada coincide con la del repo.
+
+### `FirebaseError: The query requires an index`
+La consulta combina `where()` y `orderBy()` en campos distintos, lo que exige un **índice compuesto**. Dos opciones:
+
+1. **Recomendado**: agregarlo a [`firestore.indexes.json`](firestore.indexes.json) y desplegar:
+   ```bash
+   firebase deploy --only firestore:indexes
+   ```
+2. **Rápido**: abrir el link que Firebase muestra en el error (te lleva a la consola con el índice prellenado).
+
+Después de desplegar, el índice tarda **2–10 minutos** en compilar. El estado se ve en Firebase Console → Firestore → Índices.
 
 ---
 

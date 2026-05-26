@@ -1,0 +1,14 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "capacitaciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "nit", "order": "ASCENDING" },
+        { "fieldPath": "fecha", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

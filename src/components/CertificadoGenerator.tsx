@@ -74,6 +74,10 @@ const parseAsistentesExcel = (file: File): Promise<Asistente[]> =>
   });
 
 interface DatosCapacitacion {
+  // ID del registro en Firestore. Si está presente, al generar certificados
+  // con asistentes se persiste el array de asistentes en ese documento para
+  // que la zona de afiliados pueda re-generar los certificados después.
+  id?: string;
   empresa: string;
   nit: string;
   capacitacion: string;
@@ -97,7 +101,7 @@ interface RegistroCapacitacion {
 
 const DIAS_RETENCION_PAPELERA = 30;
 
-const MODULO_RAPIDO_HASTA_MS = new Date(2026, 4, 1, 0, 0, 0).getTime();
+const MODULO_RAPIDO_HASTA_MS = new Date(2026, 5, 1, 0, 0, 0).getTime();
 const MODULO_RAPIDO_ADMIN = "desarrollo@centrojuridicointernacional.com";
 
 const CAPACITACIONES = [
@@ -137,14 +141,45 @@ let diplomaBase64Cache: string | null = null;
 
 const cargarDiplomaBase64 = async (): Promise<string> => {
   if (diplomaBase64Cache) return diplomaBase64Cache;
+
   const imgResponse = await fetch(diplomaImg);
+  if (!imgResponse.ok) {
+    throw new Error(`No se pudo descargar el diploma (HTTP ${imgResponse.status})`);
+  }
   const imgBlob = await imgResponse.blob();
-  diplomaBase64Cache = await new Promise<string>((resolve) => {
+
+  const base64 = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result as string);
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result === "string" && result.startsWith("data:")) {
+        resolve(result);
+      } else {
+        reject(new Error("El archivo del diploma quedó vacío al leerse"));
+      }
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("Error leyendo el diploma"));
     reader.readAsDataURL(imgBlob);
   });
-  return diplomaBase64Cache;
+
+  // Solo cachear si la carga fue exitosa
+  diplomaBase64Cache = base64;
+  return base64;
+};
+
+// Convierte un nombre de empresa en un nombre de archivo seguro para todos los SO
+const safeFilename = (raw: string, fallback = "Empresa"): string => {
+  if (!raw) return fallback;
+  const cleaned = raw
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")  // quita tildes (marcas diacriticas combinantes)
+    .replace(/[/\\:*?"<>|]/g, "")     // chars ilegales en Windows/macOS
+    .replace(/[^\w\s.-]/g, "")        // mantiene letras, digitos, _, ., -, espacios
+    .replace(/\s+/g, "_")             // espacios -> guion bajo
+    .replace(/_+/g, "_")              // colapsa _ múltiples
+    .replace(/^[_.-]+|[_.-]+$/g, "")  // recorta separadores al inicio/fin
+    .slice(0, 80);                    // límite razonable
+  return cleaned || fallback;
 };
 
 // Dibuja una página del certificado en el PDF usando las coordenadas del diploma
@@ -224,7 +259,7 @@ const generarPDF = async (asistentes: Asistente[], datos: DatosCapacitacion) => 
     );
   }
 
-  pdf.save(`Certificados_${datos.empresa.replace(/\s+/g, "_")}.pdf`);
+  pdf.save(`Certificados_${safeFilename(datos.empresa)}.pdf`);
 };
 
 const generarPDFEmpresa = async (datos: DatosCapacitacion) => {
@@ -240,7 +275,7 @@ const generarPDFEmpresa = async (datos: DatosCapacitacion) => {
     false,
   );
 
-  pdf.save(`Certificado_Empresa_${datos.empresa.replace(/\s+/g, "_")}.pdf`);
+  pdf.save(`Certificado_Empresa_${safeFilename(datos.empresa)}.pdf`);
 };
 
 const CertificadoGenerator = () => {
@@ -374,6 +409,7 @@ const CertificadoGenerator = () => {
       }
 
       setDatos({
+        id: encontrado.id,
         empresa: encontrado.empresa,
         nit: nitBuscar.trim(),
         capacitacion: encontrado.capacitacion,
@@ -396,6 +432,7 @@ const CertificadoGenerator = () => {
     setErrorBusqueda(null);
     setAsistentes([]);
     setDatos({
+      id: r.id,
       empresa: r.empresa,
       nit: r.nit,
       capacitacion: r.capacitacion,
@@ -531,9 +568,10 @@ const CertificadoGenerator = () => {
     return true;
   };
 
-  const guardarRegistroRapido = async () => {
+  const guardarRegistroRapido = async (): Promise<string> => {
     const user = auth.currentUser;
-    await addDoc(collection(db, "capacitaciones"), {
+    const ref = await addDoc(collection(db, "capacitaciones"), {
+      empresa: rapidoForm.empresa.trim(),
       nombre: rapidoForm.empresa.trim(),
       nit: rapidoForm.nit.trim(),
       capacitacion: rapidoForm.capacitacion,
@@ -547,6 +585,7 @@ const CertificadoGenerator = () => {
       eliminadoEn: null,
       origenRapido: true,
     });
+    return ref.id;
   };
 
   const handleRapidoGenerateEmpresa = async () => {
@@ -587,12 +626,17 @@ const CertificadoGenerator = () => {
 
     setRapidoGenerating(true);
     try {
-      await guardarRegistroRapido();
+      const registroId = await guardarRegistroRapido();
       await generarPDF(rapidoAsistentes, {
         empresa: rapidoForm.empresa.trim(),
         nit: rapidoForm.nit.trim(),
         capacitacion: rapidoForm.capacitacion,
         fecha: rapidoForm.fecha,
+      });
+      // Persistir los asistentes en el registro para que la zona de afiliados
+      // pueda re-generar los certificados individuales después.
+      await updateDoc(doc(db, "capacitaciones", registroId), {
+        asistentes: rapidoAsistentes,
       });
       setRapidoSuccess(`Certificados descargados 100% (${rapidoAsistentes.length} asistentes)`);
     } catch (err) {
@@ -623,6 +667,13 @@ const CertificadoGenerator = () => {
     setGenerating(true);
     try {
       await generarPDF(asistentes, datos);
+      // Persistir los asistentes en el registro para que la zona de afiliados
+      // pueda re-generar los certificados individuales después.
+      if (datos.id) {
+        await updateDoc(doc(db, "capacitaciones", datos.id), {
+          asistentes,
+        });
+      }
       setSuccessMsg(`Certificados descargados 100% (${asistentes.length} asistentes)`);
     } catch (err) {
       console.error("Error al generar PDF:", err);
@@ -672,7 +723,7 @@ const CertificadoGenerator = () => {
             </div>
             <div className="cert-rapido-banner-text">
               <h3>Generar certificados al instante</h3>
-              <p>Ingresa los datos manualmente, sube el Excel y descarga los certificados sin necesidad de registrar una solicitud. Disponible hasta el jueves 30 de abril de 2026.</p>
+              <p>Ingresa los datos manualmente, sube el Excel y descarga los certificados sin necesidad de registrar una solicitud. Disponible hasta el domingo 31 de mayo de 2026.</p>
             </div>
             <button
               type="button"
