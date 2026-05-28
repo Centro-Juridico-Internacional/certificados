@@ -599,17 +599,29 @@ const CertificadoGenerator = () => {
 
     setRapidoGenerating(true);
     try {
-      await guardarRegistroRapido();
-      await generarPDFEmpresa({
-        empresa: rapidoForm.empresa.trim(),
-        nit: rapidoForm.nit.trim(),
-        capacitacion: rapidoForm.capacitacion,
-        fecha: rapidoForm.fecha,
-      });
+      try {
+        await guardarRegistroRapido();
+      } catch (err) {
+        console.error("[modulo-rapido] Error al guardar en Firestore:", err);
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new Error(`No se pudo guardar el registro en Firestore: ${msg}`);
+      }
+      try {
+        await generarPDFEmpresa({
+          empresa: rapidoForm.empresa.trim(),
+          nit: rapidoForm.nit.trim(),
+          capacitacion: rapidoForm.capacitacion,
+          fecha: rapidoForm.fecha,
+        });
+      } catch (err) {
+        console.error("[modulo-rapido] Error al generar PDF empresa:", err);
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new Error(`Falla al generar el PDF: ${msg}`);
+      }
       setRapidoSuccess("Certificado de empresa descargado 100%");
     } catch (err) {
-      console.error("Error al generar PDF empresa:", err);
-      setRapidoError("Ocurrió un error al generar el certificado de la empresa.");
+      const msg = err instanceof Error ? err.message : String(err);
+      setRapidoError(`Ocurrió un error al generar el certificado de la empresa. Detalle: ${msg}`);
     } finally {
       setRapidoGenerating(false);
     }
@@ -626,22 +638,40 @@ const CertificadoGenerator = () => {
 
     setRapidoGenerating(true);
     try {
-      const registroId = await guardarRegistroRapido();
-      await generarPDF(rapidoAsistentes, {
-        empresa: rapidoForm.empresa.trim(),
-        nit: rapidoForm.nit.trim(),
-        capacitacion: rapidoForm.capacitacion,
-        fecha: rapidoForm.fecha,
-      });
+      let registroId: string;
+      try {
+        registroId = await guardarRegistroRapido();
+      } catch (err) {
+        console.error("[modulo-rapido] Error al guardar en Firestore:", err);
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new Error(`No se pudo guardar el registro en Firestore: ${msg}`);
+      }
+      try {
+        await generarPDF(rapidoAsistentes, {
+          empresa: rapidoForm.empresa.trim(),
+          nit: rapidoForm.nit.trim(),
+          capacitacion: rapidoForm.capacitacion,
+          fecha: rapidoForm.fecha,
+        });
+      } catch (err) {
+        console.error("[modulo-rapido] Error al generar PDF:", err);
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new Error(`Falla al generar el PDF: ${msg}`);
+      }
       // Persistir los asistentes en el registro para que la zona de afiliados
       // pueda re-generar los certificados individuales después.
-      await updateDoc(doc(db, "capacitaciones", registroId), {
-        asistentes: rapidoAsistentes,
-      });
+      try {
+        await updateDoc(doc(db, "capacitaciones", registroId), {
+          asistentes: rapidoAsistentes,
+        });
+      } catch (err) {
+        console.error("[modulo-rapido] Error al actualizar asistentes:", err);
+        // No relanzar: el PDF ya se descargó, solo es persistencia para la zona de afiliados
+      }
       setRapidoSuccess(`Certificados descargados 100% (${rapidoAsistentes.length} asistentes)`);
     } catch (err) {
-      console.error("Error al generar PDF:", err);
-      setRapidoError("Ocurrió un error al generar el PDF.");
+      const msg = err instanceof Error ? err.message : String(err);
+      setRapidoError(`Ocurrió un error al generar el PDF. Detalle: ${msg}`);
     } finally {
       setRapidoGenerating(false);
     }
