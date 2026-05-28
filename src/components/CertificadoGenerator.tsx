@@ -11,6 +11,7 @@ import {
   Timestamp,
   updateDoc,
 } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
 import * as XLSX from "xlsx";
 import { jsPDF } from "jspdf";
 import { auth, db } from "../firebase";
@@ -312,35 +313,63 @@ const CertificadoGenerator = () => {
     auth.currentUser?.email?.toLowerCase() === MODULO_RAPIDO_ADMIN;
 
   useEffect(() => {
-    const q = query(collection(db, "capacitaciones"), orderBy("creadoEn", "desc"));
-    const unsub = onSnapshot(q, (snap) => {
-      const rows: RegistroCapacitacion[] = snap.docs.map((d) => {
-        const data = d.data();
-        const userEmail = String(data.userEmail ?? "");
-        const juridico = userEmail.split("@")[0] || "—";
-        const empresa = String(data.nombre ?? "");
-        const nit = String(data.nit ?? "");
-        const capacitacion = String(data.capacitacion ?? "");
-        const fecha = String(data.fecha ?? "");
-        const correo = String(data.correo ?? "");
-        return {
-          id: d.id,
-          empresa,
-          nit,
-          capacitacion,
-          fecha,
-          hora: String(data.hora ?? ""),
-          correo,
-          juridico,
-          creadoEn: (data.creadoEn as Timestamp | undefined) ?? null,
-          enPapelera: Boolean(data.enPapelera),
-          eliminadoEn: (data.eliminadoEn as Timestamp | undefined) ?? null,
-          searchIndex: `${empresa} ${nit} ${correo} ${capacitacion} ${juridico} ${fecha}`.toLowerCase(),
-        };
-      });
-      setRegistros(rows);
+    // Esperar a que la auth esté lista antes de suscribirse a Firestore.
+    // Si se suscribe antes de que auth.currentUser esté establecido,
+    // Firestore rechaza la conexión con permission-denied.
+    let unsubFirestore: (() => void) | null = null;
+
+    const unsubAuth = onAuthStateChanged(auth, (currentUser) => {
+      // Limpiar suscripción anterior si la había
+      if (unsubFirestore) {
+        unsubFirestore();
+        unsubFirestore = null;
+      }
+
+      if (!currentUser) {
+        setRegistros([]);
+        return;
+      }
+
+      const q = query(collection(db, "capacitaciones"), orderBy("creadoEn", "desc"));
+      unsubFirestore = onSnapshot(
+        q,
+        (snap) => {
+          const rows: RegistroCapacitacion[] = snap.docs.map((d) => {
+            const data = d.data();
+            const userEmail = String(data.userEmail ?? "");
+            const juridico = userEmail.split("@")[0] || "—";
+            const empresa = String(data.nombre ?? "");
+            const nit = String(data.nit ?? "");
+            const capacitacion = String(data.capacitacion ?? "");
+            const fecha = String(data.fecha ?? "");
+            const correo = String(data.correo ?? "");
+            return {
+              id: d.id,
+              empresa,
+              nit,
+              capacitacion,
+              fecha,
+              hora: String(data.hora ?? ""),
+              correo,
+              juridico,
+              creadoEn: (data.creadoEn as Timestamp | undefined) ?? null,
+              enPapelera: Boolean(data.enPapelera),
+              eliminadoEn: (data.eliminadoEn as Timestamp | undefined) ?? null,
+              searchIndex: `${empresa} ${nit} ${correo} ${capacitacion} ${juridico} ${fecha}`.toLowerCase(),
+            };
+          });
+          setRegistros(rows);
+        },
+        (err) => {
+          console.error("[CertificadoGenerator] Error en snapshot de capacitaciones:", err);
+        },
+      );
     });
-    return () => unsub();
+
+    return () => {
+      unsubAuth();
+      if (unsubFirestore) unsubFirestore();
+    };
   }, []);
 
   useEffect(() => {
@@ -570,6 +599,22 @@ const CertificadoGenerator = () => {
 
   const guardarRegistroRapido = async (): Promise<string> => {
     const user = auth.currentUser;
+    if (!user) {
+      throw new Error(
+        "Tu sesión no está activa. Cierra sesión y vuelve a iniciar con tu correo corporativo.",
+      );
+    }
+    // Forzar refresh del token para garantizar que Firestore reciba uno válido.
+    // Sin esto, después de un rato la sesión puede quedar en un estado "fantasma"
+    // donde el usuario aparece logueado pero el token expiró silenciosamente.
+    try {
+      await user.getIdToken(true);
+    } catch (err) {
+      console.error("[modulo-rapido] Falla al refrescar token de auth:", err);
+      throw new Error(
+        "No se pudo refrescar tu sesión. Cierra sesión y vuelve a iniciar.",
+      );
+    }
     const ref = await addDoc(collection(db, "capacitaciones"), {
       empresa: rapidoForm.empresa.trim(),
       nombre: rapidoForm.empresa.trim(),
@@ -577,9 +622,9 @@ const CertificadoGenerator = () => {
       capacitacion: rapidoForm.capacitacion,
       fecha: rapidoForm.fecha,
       hora: "",
-      correo: user?.email ?? "",
-      userId: user?.uid ?? null,
-      userEmail: user?.email ?? null,
+      correo: user.email ?? "",
+      userId: user.uid,
+      userEmail: user.email ?? null,
       creadoEn: serverTimestamp(),
       enPapelera: false,
       eliminadoEn: null,
