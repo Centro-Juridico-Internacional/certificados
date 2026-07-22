@@ -46,6 +46,7 @@ Aplicación web interna del **Centro Jurídico Internacional** para gestionar ca
 - 📧 **Envío de correo al cliente** con los datos de la reunión usando EmailJS.
 - 📋 **Tabla de solicitudes registradas** con actualización en tiempo real (Firestore `onSnapshot`).
 - 🎓 **Generación de certificados en PDF** a partir de un archivo Excel de asistentes, usando una plantilla JPG como fondo.
+- 🛡️ **Módulo independiente de certificados SG-SST** (auditoría del Sistema de Gestión de Seguridad y Salud en el Trabajo): texto, tipografía y tamaño editables por bloque, firma con imagen por persona, y descarga en PDF o PNG.
 - ✂️ **Edición in-situ** de solicitudes desde la tabla sin perder trazabilidad del jurídico que la creó.
 - 🛡️ **Panel de administración** (solo para admins autorizados) para ver, editar y eliminar todos los registros.
 - 🌙 **Dark mode automático** según preferencia del sistema.
@@ -63,7 +64,7 @@ Aplicación web interna del **Centro Jurídico Internacional** para gestionar ca
 | Backend as a Service | Firebase (Auth + Firestore) |
 | Correos transaccionales | EmailJS |
 | Lectura de Excel | SheetJS (`xlsx`) |
-| Generación de PDF | jsPDF |
+| Generación de PDF | jsPDF (capacitaciones) · jsPDF + html2canvas (SG-SST) |
 | Estilos | CSS Modules por componente (sin framework) |
 | Compilador | React Compiler (vía plugin Babel) |
 | Hosting | Firebase Hosting |
@@ -116,6 +117,8 @@ certificados/
 │   │   ├── AdminRoute.tsx        # Guard de rutas solo para admins
 │   │   ├── CertificadoGenerator.tsx  # Componente principal de certificados
 │   │   ├── CertificadoGenerator.css
+│   │   ├── CertificadoSgSst.tsx  # Editor/generador de certificados SG-SST (independiente)
+│   │   ├── CertificadoSgSst.css
 │   │   ├── ErrorBoundary.tsx
 │   │   └── PrivateRoute.tsx      # Guard de rutas autenticadas
 │   ├── context/
@@ -130,7 +133,8 @@ certificados/
 │   │   ├── Login.tsx             # Login con Google
 │   │   ├── Dashboard.tsx         # (placeholder)
 │   │   ├── AdminPanel.tsx        # Administración de todos los registros
-│   │   └── Certificados.tsx      # Wrapper que monta CertificadoGenerator
+│   │   ├── Certificados.tsx      # Wrapper que monta CertificadoGenerator
+│   │   └── CertificadosSgSst.tsx # Wrapper que monta CertificadoSgSst
 │   ├── firebase.ts               # Inicialización de Firebase
 │   ├── App.tsx                   # Rutas + Suspense + lazy loading
 │   ├── main.tsx                  # Bootstrap React + BrowserRouter
@@ -156,6 +160,7 @@ certificados/
 | `/` | `Home.tsx` | `PrivateRoute` | Formulario de solicitud de capacitación |
 | `/dashboard` | `Dashboard.tsx` | `PrivateRoute` | Placeholder |
 | `/certificados` | `Certificados.tsx` | `PrivateRoute` | Tabla de solicitudes + generación de PDF |
+| `/certificados-sgsst` | `CertificadosSgSst.tsx` | `PrivateRoute` | Editor y descarga del certificado de auditoría SG-SST |
 
 > Todas las rutas excepto `/login` requieren sesión activa. Si no hay usuario, redirige a `/login`.
 > `AdminRoute` existe pero `/admin` aún no está cableada en `App.tsx` — para habilitarla, añadir la ruta envuelta en `<AdminRoute>`.
@@ -184,11 +189,25 @@ certificados/
   - **Generar Certificados** → abre un modal pre-llenado con los datos del registro. El usuario sube un Excel `.xlsx` con columnas `Nombre | Cédula` y se genera un PDF multipágina con un certificado por asistente.
   - **Editar** → abre un modal para modificar empresa, NIT, correo, capacitación, fecha u hora. Guarda con `updateDoc` (el `userEmail` / jurídico se preserva).
 - PDF generado con **jsPDF** directamente (sin DOM oculto ni `html2canvas`), usando `diploma.jpg` como fondo y superponiendo texto.
+- **Formato del nombre de la capacitación**: en el texto "Por su asistencia a la socializacion de …" el nombre se muestra en formato título (primera letra de cada palabra en mayúscula), dejando en minúscula las palabras de enlace (`de`, `del`, `la`, `el`, `los`, `y`, `en`, `con`, `para`, `por`, etc.). Ej.: `Reglamento Interno de Trabajo`.
+- **CC opcional**: si el Excel de asistentes trae solo la columna de nombres (sin cédula), el certificado se genera **sin la línea `CC:`**. Si la cédula viene diligenciada, se muestra `CC: número` (o `CE:` según el tipo de documento).
 
 ### 4. Panel de administración (`pages/AdminPanel.tsx`)
 - Lista completa de registros con búsqueda por texto y filtro por mes.
 - Modal de detalle con edición de todos los campos (incluyendo `linkMeet`) y eliminación.
 - **Nota**: este componente existe pero la ruta `/admin` no está activa en `App.tsx`.
+
+### 5. Certificados SG-SST (`components/CertificadoSgSst.tsx`)
+Módulo **independiente** del generador de capacitaciones, accesible en `/certificados-sgsst` (botón "Certificados SG-SST" en el header). Genera el certificado de auditoría del Sistema de Gestión de Seguridad y Salud en el Trabajo.
+
+- **No usa Firestore ni Excel**: todo el contenido se edita en pantalla y se descarga localmente.
+- **Vista previa en vivo**: el certificado se renderiza sobre la plantilla [`src/assets/diploma-sgsst.png`](src/assets/diploma-sgsst.png) y refleja los cambios al instante.
+- **Edición por bloque** (texto principal, segundo párrafo/resolución, empresa opcional, nombres y cargos): cada bloque permite elegir **tipografía** y **tamaño** de forma independiente.
+- **Firma con imagen por persona**: se puede subir una imagen (PNG con fondo transparente recomendado) para cada firmante, con tamaño ajustable, que se posiciona sobre la línea de firma.
+- **Descarga en PDF o PNG** mediante `html2canvas` (captura la vista previa) + `jsPDF`. El tamaño de página del PDF respeta la relación de aspecto nativa de la plantilla para no deformar la imagen.
+- **Posiciones calibradas** contra la plantilla: la línea divisora (~54.5%) y las líneas de firma (~79%, centros en 39.2% y 60.8%) se midieron sobre la imagen para centrar el texto correctamente. Si se reemplaza la plantilla, hay que recalibrar estas posiciones en [`CertificadoSgSst.css`](src/components/CertificadoSgSst.css) y el `RATIO` en [`CertificadoSgSst.tsx`](src/components/CertificadoSgSst.tsx).
+
+> Para cambiar la plantilla: reemplazar `src/assets/diploma-sgsst.png`, ajustar `RATIO` (ancho/alto de la nueva imagen) y verificar las posiciones (`.sgsst-body`, `.sgsst-firma-*`) según dónde queden la línea divisora y las líneas de firma.
 
 ---
 

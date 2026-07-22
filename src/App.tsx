@@ -8,6 +8,7 @@ const Home = lazy(() => import("./pages/Home"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Login = lazy(() => import("./pages/Login"));
 const Certificados = lazy(() => import("./pages/Certificados"));
+const CertificadosSgSst = lazy(() => import("./pages/CertificadosSgSst"));
 
 const PageFallback = () => (
   <div style={{
@@ -51,6 +52,14 @@ function App() {
               element={
                 <PrivateRoute>
                   <Certificados />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/certificados-sgsst"
+              element={
+                <PrivateRoute>
+                  <CertificadosSgSst />
                 </PrivateRoute>
               }
             />

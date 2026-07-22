@@ -102,9 +102,6 @@ interface RegistroCapacitacion {
 
 const DIAS_RETENCION_PAPELERA = 30;
 
-const MODULO_RAPIDO_HASTA_MS = new Date(2026, 5, 1, 0, 0, 0).getTime();
-const MODULO_RAPIDO_ADMIN = "desarrollo@centrojuridicointernacional.com";
-
 const CAPACITACIONES = [
   "REGISTRO Y/O RENOVACIÓN DE MARCA",
   "REGLAMENTO INTERNO DE TRABAJO",
@@ -214,7 +211,18 @@ const dibujarPaginaCertificado = (
   pdf.setFontSize(9);
   pdf.setTextColor(30, 30, 30);
   pdf.text(
-    `Por su asistencia a la socializacion de ${datos.capacitacion.toLowerCase()}`,
+    `Por su asistencia a la socializacion de ${(() => {
+      const minusculas = new Set(["de", "del", "la", "las", "el", "los", "y", "e", "o", "u", "a", "en", "con", "para", "por"]);
+      return datos.capacitacion
+        .toLowerCase()
+        .split(/\s+/)
+        .map((palabra, i) =>
+          i > 0 && minusculas.has(palabra)
+            ? palabra
+            : palabra.replace(/^\p{L}/u, (c) => c.toUpperCase()),
+        )
+        .join(" ");
+    })()}`,
     cx, 138, { align: "center", maxWidth: 180 },
   );
 
@@ -255,7 +263,7 @@ const generarPDF = async (asistentes: Asistente[], datos: DatosCapacitacion) => 
     dibujarPaginaCertificado(
       pdf, imgBase64, pdfW, pdfH, datos,
       a.nombre,
-      `${a.tipoDoc}: ${a.cedula}`,
+      a.cedula.trim() ? `${a.tipoDoc}: ${a.cedula}` : "",
       true,
     );
   }
@@ -308,9 +316,7 @@ const CertificadoGenerator = () => {
 
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  const moduloRapidoDisponible =
-    Date.now() < MODULO_RAPIDO_HASTA_MS ||
-    auth.currentUser?.email?.toLowerCase() === MODULO_RAPIDO_ADMIN;
+  const moduloRapidoDisponible = true;
 
   useEffect(() => {
     // Esperar a que la auth esté lista antes de suscribirse a Firestore.
@@ -798,7 +804,7 @@ const CertificadoGenerator = () => {
             </div>
             <div className="cert-rapido-banner-text">
               <h3>Generar certificados al instante</h3>
-              <p>Ingresa los datos manualmente, sube el Excel y descarga los certificados sin necesidad de registrar una solicitud. Disponible hasta el domingo 31 de mayo de 2026.</p>
+              <p>Ingresa los datos manualmente, sube el Excel y descarga los certificados sin necesidad de registrar una solicitud.</p>
             </div>
             <button
               type="button"
