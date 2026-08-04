@@ -18,7 +18,7 @@ import { auth, db } from "../firebase";
 import diplomaImg from "../assets/diploma.jpg";
 import "./CertificadoGenerator.css";
 
-type TipoDoc = "CC" | "CE";
+type TipoDoc = "CC" | "CE" | "PPT";
 
 interface Asistente {
   nombre: string;
@@ -28,6 +28,7 @@ interface Asistente {
 
 const normalizeTipoDoc = (raw: string): TipoDoc => {
   const s = raw.trim().toUpperCase().replace(/[.\s]/g, "");
+  if (s === "PPT" || s.includes("PROTECCIONTEMPORAL") || s.includes("PERMISO")) return "PPT";
   if (s === "CE" || s.includes("EXTRANJ")) return "CE";
   return "CC";
 };
@@ -37,6 +38,7 @@ const descargarPlantillaAsistentes = () => {
     ["Nombre", "Número de documento", "Tipo"],
     ["MARÍA CAMILA CASILIMAS", "1074812954", "CC"],
     ["JEAN PIERRE DUBOIS", "AB123456", "CE"],
+    ["YURBIN ALEJANDRO GONZÁLEZ", "7412589630", "PPT"],
     ["LUIS ALBERTO HOYOS RODRÍGUEZ", "80801151", "CC"],
   ];
   const ws = XLSX.utils.aoa_to_sheet(rows);
@@ -995,7 +997,7 @@ const CertificadoGenerator = () => {
                       : "Subir archivo Excel"}
                   </label>
                   <p className="cert-upload-help">
-                    El archivo debe tener <strong>3 columnas</strong>: <strong>Nombre</strong>, <strong>Número de documento</strong> y <strong>Tipo</strong> (CC o CE). Si omites la tercera columna, todos los asistentes se registran como CC.
+                    El archivo debe tener <strong>3 columnas</strong>: <strong>Nombre</strong>, <strong>Número de documento</strong> y <strong>Tipo</strong> (CC, CE o PPT). Si omites la tercera columna, todos los asistentes se registran como CC.
                   </p>
                   <button
                     type="button"
@@ -1028,6 +1030,7 @@ const CertificadoGenerator = () => {
                           >
                             <option value="CC">CC</option>
                             <option value="CE">CE</option>
+                            <option value="PPT">PPT</option>
                           </select>
                           <span className="cert-list-cc">{a.cedula}</span>
                         </div>
@@ -1292,7 +1295,7 @@ const CertificadoGenerator = () => {
                       Subir archivo Excel
                     </label>
                     <p className="cert-upload-help">
-                      El archivo debe tener <strong>3 columnas</strong>: <strong>Nombre</strong>, <strong>Número de documento</strong> y <strong>Tipo</strong> (CC o CE). Si omites la tercera columna, todos los asistentes se registran como CC.
+                      El archivo debe tener <strong>3 columnas</strong>: <strong>Nombre</strong>, <strong>Número de documento</strong> y <strong>Tipo</strong> (CC, CE o PPT). Si omites la tercera columna, todos los asistentes se registran como CC.
                     </p>
                     <button
                       type="button"
@@ -1325,6 +1328,7 @@ const CertificadoGenerator = () => {
                             >
                               <option value="CC">CC</option>
                               <option value="CE">CE</option>
+                              <option value="PPT">PPT</option>
                             </select>
                             <span className="cert-list-cc">{a.cedula}</span>
                           </div>
